@@ -75,8 +75,13 @@ public class ParserTest {
     }
     
     @Test
-    public void simpleParsing() {
+    public void simple() {
         testFromResource("simple");
+    }
+    
+    @Test
+    public void simpleNamed() {
+        testFromResource("simple-named");
     }
     
     @Test

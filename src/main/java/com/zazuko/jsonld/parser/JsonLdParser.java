@@ -112,6 +112,11 @@ public class JsonLdParser {
         SubjectParser subjectParser = new SubjectParser();
         subjectParser.parse();
     }
+    
+    private BlankNode getBlankNode(String identifier) {
+        //TODO return same for same ID
+        return new BlankNode();
+    }
 
     class SubjectParser {
 
@@ -167,9 +172,13 @@ public class JsonLdParser {
         }
 
         private BlankNodeOrIRI parseId() {
-            //TODO implement
             jsonParser.next();
-            return new BlankNode();
+            final String identifier = jsonParser.getString();
+            if (identifier.startsWith("_:")) {
+                return getBlankNode(identifier);
+            } else {
+                return new IRI(identifier);
+            }
         }
 
         private IRI getIRI(String keyName) {
