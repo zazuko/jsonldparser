@@ -24,4 +24,4 @@ final Graph graph = new SimpleGraph();
 JsonLdParser.parse(inJsonLd, graph);
 ```
 
-Nota that you don't need to pass a graph but you can pass an instance of [TripleSink](com/zazuko/jsonld/parser/TripleSink.java) for efficient streaming parsing.
+Note that you don't need to pass a graph but you can pass an instance of [TripleSink](src/main/java/com/zazuko/jsonld/parser/TripleSink.java) for efficient streaming parsing.
