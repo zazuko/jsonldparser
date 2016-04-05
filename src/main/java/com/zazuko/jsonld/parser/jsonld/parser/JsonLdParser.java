@@ -23,10 +23,13 @@
  */
 package com.zazuko.jsonld.parser.jsonld.parser;
 
+import com.sun.javafx.scene.control.skin.VirtualFlow;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.util.Collection;
+import java.util.List;
 import javax.json.Json;
 import javax.json.stream.JsonParser;
 import javax.json.stream.JsonParser.Event;
@@ -35,10 +38,12 @@ import org.apache.clerezza.commons.rdf.BlankNode;
 import org.apache.clerezza.commons.rdf.BlankNodeOrIRI;
 import org.apache.clerezza.commons.rdf.Graph;
 import org.apache.clerezza.commons.rdf.IRI;
+import org.apache.clerezza.commons.rdf.RDFTerm;
 import org.apache.clerezza.commons.rdf.Triple;
 import org.apache.clerezza.commons.rdf.impl.utils.LiteralImpl;
 import org.apache.clerezza.commons.rdf.impl.utils.PlainLiteralImpl;
 import org.apache.clerezza.commons.rdf.impl.utils.TripleImpl;
+import org.apache.clerezza.commons.rdf.impl.utils.TypedLiteralImpl;
 import org.apache.clerezza.rdf.ontologies.RDF;
 
 /**
@@ -105,40 +110,55 @@ public class JsonLdParser {
 
     class SubjectParser {
 
-        private final String firstKey;
-        public final BlankNodeOrIRI subject;
+        private IRI ambiguousTypeIRI = null;
+        private String value = null;
+        public RDFTerm subject;
 
-        public SubjectParser() {
+        public void parse() {
             JsonParser.Event first = jsonParser.next();
             if (!first.equals(JsonParser.Event.KEY_NAME)) {
                 throw new RuntimeException("Sorry");
             }
-            firstKey = jsonParser.getString();
+            String firstKey = jsonParser.getString();
             if (firstKey.equals("@id")) {
                 subject = parseId();
-                jsonParser.hasNext();
-            } else {
-                subject = new BlankNode();
-            }
-        }
-
-        public void parse() {
+                jsonParser.next();
+            } 
             handleKey();
             while (jsonParser.hasNext()) {
-                switch (jsonParser.next()) {
+                final Event next = jsonParser.next();
+                switch (next) {
                     case KEY_NAME: {
                         handleKey();
                         break;
                     }
                     case END_OBJECT: {
+                        if (value != null) {
+                            if (subject != null) {
+                                throw new RuntimeException("@value combined with incompatible key");
+                            }
+                            subject = new TypedLiteralImpl(value, ambiguousTypeIRI);
+                            return;
+                        }
+                        if (ambiguousTypeIRI != null) {
+                            sink.add(new TripleImpl(getSubject(), RDF.type, ambiguousTypeIRI));
+                        }
                         return;
                     }
                     default: {
-                        throw new RuntimeException("Document doesn't contain an Object");
+                        throw new RuntimeException("Not supported here: "+next);
                     }
                 }
 
             }
+        }
+        
+        //called when the resource represented by this node is used as subject
+        private BlankNodeOrIRI getSubject() {
+            if (subject == null) {
+                subject = new BlankNode();
+            }
+            return (BlankNodeOrIRI) subject;
         }
 
         private BlankNodeOrIRI parseId() {
@@ -155,14 +175,70 @@ public class JsonLdParser {
             final String keyName = jsonParser.getString();
             if (keyName.equals("@type")) {
                 //either datatype or rdf type
-                //TODO handle Datatype
+                //@type value must a string, an array of strings (, or an empty object?)
+                IRI[] types;
                 final Event next = jsonParser.next();
-                sink.add(new TripleImpl(subject, RDF.type, new IRI(jsonParser.getString())));
-            } else {
-                final IRI property = getIRI(keyName);
-                final ObjectParser subjectPredicateParser = new ObjectParser(subject, property);
-                subjectPredicateParser.parse();
+                switch (next) {
+                    case VALUE_STRING: {
+                        types = new IRI[]{new IRI(jsonParser.getString())};
+                        break;
+                    }
+                    case START_ARRAY: {
+                        types = readTypes();
+                        break;
+                    }
+                    default: {
+                        throw new RuntimeException("Not supported here: "+next);
+                    }
+                }
+                //if a single type is defined it could also be a datype for a literal
+                //otherwise they are rdf types
+                if (types.length == 1) {
+                    ambiguousTypeIRI = types[0];
+                } else {
+                    for (IRI type : types) {
+                        sink.add(new TripleImpl(getSubject(), RDF.type, type));
+                    }
+                }
+                return;
             }
+            if (keyName.equals("@value")) {
+                final Event next = jsonParser.next();
+                switch (next) {
+                    case VALUE_STRING: {
+                        value = jsonParser.getString();
+                        break;
+                    }
+                    default: {
+                        throw new RuntimeException("Value must be a string"+next);
+                    }
+                }
+                return;
+            }
+            final IRI property = getIRI(keyName);
+            final ObjectParser subjectPredicateParser = new ObjectParser(getSubject(), property);
+            subjectPredicateParser.parse();
+            
+        }
+
+        private IRI[] readTypes() {
+            final List<IRI> types = new VirtualFlow.ArrayLinkedList<>();
+            while (jsonParser.hasNext()) {
+                final Event next = jsonParser.next();
+                switch (next) {
+                    case VALUE_STRING: {
+                        types.add(new IRI(jsonParser.getString()));
+                        break;
+                    }
+                    case END_ARRAY: {
+                        return types.toArray(new IRI[types.size()]);
+                    }
+                    default: {
+                        throw new RuntimeException("Not supported here: "+next);
+                    }
+                }
+            }
+            throw new RuntimeException("Unterminated Array");
         }
 
     }
@@ -185,7 +261,7 @@ public class JsonLdParser {
                     break;
                 }
                 case START_ARRAY: {
-                    //TODO implement
+                    parseArray();
                     break;
                 }
                 case VALUE_STRING: {
@@ -200,8 +276,30 @@ public class JsonLdParser {
 
         private void parseSingleObject() {
             final SubjectParser subjectParser = new SubjectParser();
-            sink.add(new TripleImpl(subject, predicate, subjectParser.subject));
             subjectParser.parse();
+            sink.add(new TripleImpl(subject, predicate, subjectParser.subject));
+        }
+
+        private void parseArray() {
+            while (jsonParser.hasNext()) {
+                final Event next = jsonParser.next();
+                switch (next) {
+                    case START_OBJECT: {
+                        parseSingleObject();
+                        break;
+                    }
+                    case VALUE_STRING: {
+                        sink.add(new TripleImpl(subject, predicate, new PlainLiteralImpl(jsonParser.getString())));
+                        break;
+                    }
+                    case END_ARRAY: {
+                        return;
+                    }
+                    default: {
+                        throw new RuntimeException("Not supported here: "+next);
+                    }
+                }
+            }
         }
 
     }

@@ -62,15 +62,36 @@ public class ParserTest {
     public void tearDown() {
     }
 
-    @Test
-    public void simpleParsing() {
-        final InputStream inJsonLd = getClass().getResourceAsStream("simple.json");
+    protected void testFromResource(String baseName) {
+        final InputStream inJsonLd = getClass().getResourceAsStream(baseName+".json");
         final Graph graph = new SimpleGraph();
         JsonLdParser.parse(inJsonLd, graph);
         final ImmutableGraph result = graph.getImmutableGraph();
         final Parser parser = Parser.getInstance();
-        final InputStream inTurtle = getClass().getResourceAsStream("simple.ttl");
+        final InputStream inTurtle = getClass().getResourceAsStream(baseName+".ttl");
         ImmutableGraph expected = parser.parse(inTurtle, SupportedFormat.TURTLE);
         Assert.assertEquals(expected, result);
+    }
+    
+    @Test
+    public void simpleParsing() {
+        testFromResource("simple");
+    }
+    
+    @Test
+    public void nestedWithoutId() {
+        testFromResource("nested-without-id");
+    }
+    
+    @Test
+    public void typedLiteral() {
+        testFromResource("typed-literal");
+    }
+    
+    @Test
+    public void interlisParsing() {
+        final InputStream inJsonLd = getClass().getResourceAsStream("interlis.json");
+        final Graph graph = new SimpleGraph();
+        JsonLdParser.parse(inJsonLd, graph);
     }
 }
