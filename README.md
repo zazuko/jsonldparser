@@ -7,6 +7,7 @@ doesn't support contexts (@Context).
 
 Other limitations:
 - The `@id` is only allowed as the first key of an object
+- The `@graph` key is not yet supported, so it only allows for connected graphs
  
 
 ## So what can it do
