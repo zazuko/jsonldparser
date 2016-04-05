@@ -17,6 +17,23 @@ Other limitations:
  
 ## How to use it
 
+It can be used programmatically or on the command line. In both cases you'll 
+want to build it first using maven:
+
+    mvn install
+
+### Command line usage
+
+After building you'll find a file named `jsonld-parser-[VERSION].jar` simply 
+invoke this file with `java -jar` and specify the path to your JSON-LD file as 
+argument.
+
+    cd target
+    java -jar jsonld-parser-*.jar ./test-classes/com/zazuko/jsonld/parser/knows-circle.json
+
+
+### Programmatic usage
+
 The following lines from the test illustarte the programmatic usage:
 
 ```

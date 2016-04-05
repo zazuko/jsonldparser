@@ -28,6 +28,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,15 +46,12 @@ import org.apache.clerezza.commons.rdf.BlankNodeOrIRI;
 import org.apache.clerezza.commons.rdf.Graph;
 import org.apache.clerezza.commons.rdf.IRI;
 import org.apache.clerezza.commons.rdf.Language;
+import org.apache.clerezza.commons.rdf.Literal;
 import org.apache.clerezza.commons.rdf.RDFTerm;
 import org.apache.clerezza.commons.rdf.Triple;
-import org.apache.clerezza.commons.rdf.impl.utils.LiteralImpl;
 import org.apache.clerezza.commons.rdf.impl.utils.PlainLiteralImpl;
 import org.apache.clerezza.commons.rdf.impl.utils.TripleImpl;
 import org.apache.clerezza.commons.rdf.impl.utils.TypedLiteralImpl;
-import org.apache.clerezza.commons.rdf.impl.utils.simple.SimpleGraph;
-import org.apache.clerezza.rdf.core.serializedform.Serializer;
-import org.apache.clerezza.rdf.core.serializedform.SupportedFormat;
 import org.apache.clerezza.rdf.ontologies.RDF;
 
 /**
@@ -65,16 +67,72 @@ public class JsonLdParser {
         final String fileName = args[0];
         final File file = new File(fileName);
         if (!file.exists()) {
-            System.err.println("File "+file+" does not exist");
+            System.err.println("File " + file + " does not exist");
             System.exit(-1);
         }
         final FileInputStream in = new FileInputStream(file);
-        //TODO be more efficient by making sink that directly writes to output
-        Graph out = new SimpleGraph();
-        parse(in, out);
-        Serializer.getInstance().serialize(System.out, out, SupportedFormat.N_TRIPLE);
+        parse(in, System.out);
     }
-    
+
+    static void parse(final InputStream in, final OutputStream out) {
+        final PrintWriter printWriter;
+        try {
+            printWriter = new PrintWriter(new OutputStreamWriter(out, "utf-8"), true);
+        } catch (UnsupportedEncodingException ex) {
+            throw new RuntimeException(ex);
+        }
+        parse(in, new TripleSink() {
+            
+            final WeakHashMap<BlankNode, String> node2IdMap = new WeakHashMap<>();
+            int idCounter = 1;
+            
+            @Override
+            public void add(Triple triple) {
+                printWriter.println(toNT(triple));
+            }
+
+            private String toNT(Triple triple) {
+                return toNT(triple.getSubject()) + " " + toNT(triple.getPredicate()) + " " + toNT(triple.getObject()) + ".";
+            }
+
+            private String toNT(Literal literal) {
+                //TODO real impl
+                return literal.toString();
+            }
+
+            private String toNT(IRI iri) {
+                //TODO real impl
+                return iri.toString();
+            }
+
+            private String toNT(BlankNode node) {
+                String id = node2IdMap.get(node);
+                if (id == null) {
+                    id = Integer.toString(idCounter);
+                    idCounter++;
+                    node2IdMap.put(node, id);
+                }
+                return "_:"+id;
+            }
+            
+            private String toNT(RDFTerm node) {
+                if (node instanceof Literal) {
+                    return toNT((Literal)node);
+                } else {
+                    return toNT((BlankNodeOrIRI)node);
+                }
+            }
+            
+            private String toNT(BlankNodeOrIRI node) {
+                if (node instanceof IRI) {
+                    return toNT((IRI)node);
+                } else {
+                    return toNT((BlankNode)node);
+                }
+            }
+        });
+    }
+
     static void parse(final InputStream in, final Graph graph) {
         parse(in, new TripleSink() {
             @Override
@@ -87,14 +145,14 @@ public class JsonLdParser {
 
     static void parse(InputStream in, TripleSink sink) {
         final JsonParserFactory factory = Json.createParserFactory(null);
-        final JsonParser jsonParser = factory.createParser(in);
+        final JsonParser jsonParser = factory.createParser(in, Charset.forName("utf-8"));
         JsonLdParser jsonLdParser = new JsonLdParser(jsonParser, sink);
         jsonLdParser.parse();
     }
 
     private final JsonParser jsonParser;
     private final TripleSink sink;
-    private final Map<String, BlankNode> label2bnodeMap= new HashMap<>();
+    private final Map<String, BlankNode> label2bnodeMap = new HashMap<>();
 
     private JsonLdParser(JsonParser jsonParser, TripleSink sink) {
         this.jsonParser = jsonParser;
@@ -118,7 +176,7 @@ public class JsonLdParser {
         SubjectParser subjectParser = new SubjectParser();
         subjectParser.parse();
     }
-    
+
     private BlankNode getBlankNode(String identifier) {
         BlankNode result = label2bnodeMap.get(identifier);
         if (result == null) {
@@ -146,7 +204,7 @@ public class JsonLdParser {
                 if (jsonParser.next().equals(JsonParser.Event.END_OBJECT)) {
                     return;
                 }
-            } 
+            }
             handleKey();
             while (jsonParser.hasNext()) {
                 final Event next = jsonParser.next();
@@ -173,13 +231,13 @@ public class JsonLdParser {
                         return;
                     }
                     default: {
-                        throw new RuntimeException("Not supported here: "+next);
+                        throw new RuntimeException("Not supported here: " + next);
                     }
                 }
 
             }
         }
-        
+
         //called when the resource represented by this node is used as subject
         private BlankNodeOrIRI getSubject() {
             if (node == null) {
@@ -219,7 +277,7 @@ public class JsonLdParser {
                         break;
                     }
                     default: {
-                        throw new RuntimeException("Not supported here: "+next);
+                        throw new RuntimeException("Not supported here: " + next);
                     }
                 }
                 //if a single type is defined it could also be a datype for a literal
@@ -241,7 +299,7 @@ public class JsonLdParser {
                         break;
                     }
                     default: {
-                        throw new RuntimeException("Language must be a string"+next);
+                        throw new RuntimeException("Language must be a string" + next);
                     }
                 }
                 return;
@@ -254,7 +312,7 @@ public class JsonLdParser {
                         break;
                     }
                     default: {
-                        throw new RuntimeException("Value must be a string"+next);
+                        throw new RuntimeException("Value must be a string" + next);
                     }
                 }
                 return;
@@ -262,7 +320,7 @@ public class JsonLdParser {
             final IRI property = getIRI(keyName);
             final ObjectParser subjectPredicateParser = new ObjectParser(getSubject(), property);
             subjectPredicateParser.parse();
-            
+
         }
 
         private IRI[] readTypes() {
@@ -278,7 +336,7 @@ public class JsonLdParser {
                         return types.toArray(new IRI[types.size()]);
                     }
                     default: {
-                        throw new RuntimeException("Not supported here: "+next);
+                        throw new RuntimeException("Not supported here: " + next);
                     }
                 }
             }
@@ -315,7 +373,7 @@ public class JsonLdParser {
                 default: {
                     throw new RuntimeException("Currently only documents staring with resorce are supported, got: " + firstEvent);
                 }
-            }           
+            }
         }
 
         private void parseSingleObject() {
@@ -340,7 +398,7 @@ public class JsonLdParser {
                         return;
                     }
                     default: {
-                        throw new RuntimeException("Not supported here: "+next);
+                        throw new RuntimeException("Not supported here: " + next);
                     }
                 }
             }

@@ -24,6 +24,9 @@
 package com.zazuko.jsonld.parser;
 
 import com.zazuko.jsonld.parser.JsonLdParser;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import org.apache.clerezza.commons.rdf.Graph;
 import org.apache.clerezza.commons.rdf.ImmutableGraph;
@@ -63,44 +66,51 @@ public class ParserTest {
     public void tearDown() {
     }
 
-    protected void testFromResource(String baseName) {
+    protected void testFromResource(String baseName) throws Exception {
         final InputStream inJsonLd = getClass().getResourceAsStream(baseName+".json");
         final Graph graph = new SimpleGraph();
         JsonLdParser.parse(inJsonLd, graph);
         final ImmutableGraph result = graph.getImmutableGraph();
         final Parser parser = Parser.getInstance();
         final InputStream inTurtle = getClass().getResourceAsStream(baseName+".ttl");
-        ImmutableGraph expected = parser.parse(inTurtle, SupportedFormat.TURTLE);
+        final ImmutableGraph expected = parser.parse(inTurtle, SupportedFormat.TURTLE);
         Assert.assertEquals(expected, result);
+        //And parse to stream
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        final InputStream inJsonLd2 = getClass().getResourceAsStream(baseName+".json");
+        JsonLdParser.parse(inJsonLd2, baos);
+        final InputStream inN3Output = new ByteArrayInputStream(baos.toByteArray());
+        final ImmutableGraph n3output = parser.parse(inN3Output, SupportedFormat.N_TRIPLE);
+        Assert.assertEquals(expected, n3output);
     }
     
     @Test
-    public void simple() {
+    public void simple() throws Exception {
         testFromResource("simple");
     }
     
     @Test
-    public void simpleNamed() {
+    public void simpleNamed() throws Exception {
         testFromResource("simple-named");
     }
     
     @Test
-    public void nestedWithoutId() {
+    public void nestedWithoutId() throws Exception {
         testFromResource("nested-without-id");
     }
     
     @Test
-    public void typedLiteral() {
+    public void typedLiteral() throws Exception {
         testFromResource("typed-literal");
     }
     
     @Test
-    public void interlis() {
+    public void interlis() throws Exception {
         testFromResource("interlis");
     }
     
     @Test
-    public void knowsCircle() {
+    public void knowsCircle() throws Exception {
         testFromResource("knows-circle");
     }
     
