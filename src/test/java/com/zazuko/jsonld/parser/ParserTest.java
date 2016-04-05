@@ -21,8 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package com.zazuko.jsonld.parser.jsonld.parser;
+package com.zazuko.jsonld.parser;
 
+import com.zazuko.jsonld.parser.JsonLdParser;
 import java.io.InputStream;
 import org.apache.clerezza.commons.rdf.Graph;
 import org.apache.clerezza.commons.rdf.ImmutableGraph;

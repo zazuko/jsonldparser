@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package com.zazuko.jsonld.parser.jsonld.parser;
+package com.zazuko.jsonld.parser;
 
 import org.apache.clerezza.commons.rdf.Triple;
 
