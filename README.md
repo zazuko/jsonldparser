@@ -12,7 +12,7 @@ Other limitations:
 
 ## So what can it do
 
-- Parse rather large files
+- Parse rather large files (900MB in less than 15s on the command line of my laptop)
 - See the files in [src/test/resources/com/zazuko/jsonld/parser](src/test/resources/com/zazuko/jsonld/parser) for example of files that it can parse.
  
 ## How to use it
