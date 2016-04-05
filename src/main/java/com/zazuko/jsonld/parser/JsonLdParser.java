@@ -28,7 +28,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
-import java.util.Collection;
 import java.util.List;
 import javax.json.Json;
 import javax.json.stream.JsonParser;
@@ -40,10 +39,12 @@ import org.apache.clerezza.commons.rdf.Graph;
 import org.apache.clerezza.commons.rdf.IRI;
 import org.apache.clerezza.commons.rdf.RDFTerm;
 import org.apache.clerezza.commons.rdf.Triple;
-import org.apache.clerezza.commons.rdf.impl.utils.LiteralImpl;
 import org.apache.clerezza.commons.rdf.impl.utils.PlainLiteralImpl;
 import org.apache.clerezza.commons.rdf.impl.utils.TripleImpl;
 import org.apache.clerezza.commons.rdf.impl.utils.TypedLiteralImpl;
+import org.apache.clerezza.commons.rdf.impl.utils.simple.SimpleGraph;
+import org.apache.clerezza.rdf.core.serializedform.Serializer;
+import org.apache.clerezza.rdf.core.serializedform.SupportedFormat;
 import org.apache.clerezza.rdf.ontologies.RDF;
 
 /**
@@ -55,7 +56,7 @@ public class JsonLdParser {
     /**
      * @param args the command line arguments
      */
-    /*public static void main(String[] args) throws FileNotFoundException {
+    public static void main(String[] args) throws FileNotFoundException {
         final String fileName = args[0];
         final File file = new File(fileName);
         if (!file.exists()) {
@@ -63,8 +64,12 @@ public class JsonLdParser {
             System.exit(-1);
         }
         final FileInputStream in = new FileInputStream(file);
-        parse(in);
-    }*/
+        //TODO be more efficient by making sink that directly writes to output
+        Graph out = new SimpleGraph();
+        parse(in, out);
+        Serializer.getInstance().serialize(System.out, out, SupportedFormat.N_TRIPLE);
+    }
+    
     static void parse(final InputStream in, final Graph graph) {
         parse(in, new TripleSink() {
             @Override
@@ -163,7 +168,7 @@ public class JsonLdParser {
 
         private BlankNodeOrIRI parseId() {
             //TODO implement
-            System.out.println(jsonParser.next());
+            jsonParser.next();
             return new BlankNode();
         }
 
