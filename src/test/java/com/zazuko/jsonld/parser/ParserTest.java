@@ -99,4 +99,9 @@ public class ParserTest {
         testFromResource("interlis");
     }
     
+    @Test
+    public void knowsCircle() {
+        testFromResource("knows-circle");
+    }
+    
 }

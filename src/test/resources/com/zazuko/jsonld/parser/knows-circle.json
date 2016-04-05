@@ -1,0 +1,11 @@
+{
+  "@id": "_:jane",
+  "@type": "http://schema.org/Person",
+  "http://schema.org/name": "Jane Doe",
+  "http://schema.org/knows": {
+      "http://schema.org/knows": {
+          "@id": "_:jane" 
+      },
+      "http://schema.org/name": "Hans Muster"
+  } 
+}

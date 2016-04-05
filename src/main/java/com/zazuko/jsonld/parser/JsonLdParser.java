@@ -28,7 +28,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 import javax.json.Json;
 import javax.json.stream.JsonParser;
 import javax.json.stream.JsonParser.Event;
@@ -89,6 +92,7 @@ public class JsonLdParser {
 
     private final JsonParser jsonParser;
     private final TripleSink sink;
+    private final Map<String, BlankNode> label2bnodeMap= new HashMap<>();
 
     private JsonLdParser(JsonParser jsonParser, TripleSink sink) {
         this.jsonParser = jsonParser;
@@ -114,8 +118,12 @@ public class JsonLdParser {
     }
     
     private BlankNode getBlankNode(String identifier) {
-        //TODO return same for same ID
-        return new BlankNode();
+        BlankNode result = label2bnodeMap.get(identifier);
+        if (result == null) {
+            result = new BlankNode();
+            label2bnodeMap.put(identifier, result);
+        }
+        return result;
     }
 
     class SubjectParser {
@@ -132,7 +140,9 @@ public class JsonLdParser {
             String firstKey = jsonParser.getString();
             if (firstKey.equals("@id")) {
                 subject = parseId();
-                jsonParser.next();
+                if (jsonParser.next().equals(JsonParser.Event.END_OBJECT)) {
+                    return;
+                }
             } 
             handleKey();
             while (jsonParser.hasNext()) {
