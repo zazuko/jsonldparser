@@ -130,7 +130,7 @@ public class JsonLdParser {
 
         private IRI ambiguousTypeIRI = null;
         private String value = null;
-        public RDFTerm subject;
+        private RDFTerm node;
 
         public void parse() {
             JsonParser.Event first = jsonParser.next();
@@ -139,7 +139,7 @@ public class JsonLdParser {
             }
             String firstKey = jsonParser.getString();
             if (firstKey.equals("@id")) {
-                subject = parseId();
+                node = parseId();
                 if (jsonParser.next().equals(JsonParser.Event.END_OBJECT)) {
                     return;
                 }
@@ -154,10 +154,10 @@ public class JsonLdParser {
                     }
                     case END_OBJECT: {
                         if (value != null) {
-                            if (subject != null) {
+                            if (node != null) {
                                 throw new RuntimeException("@value combined with incompatible key");
                             }
-                            subject = new TypedLiteralImpl(value, ambiguousTypeIRI);
+                            node = new TypedLiteralImpl(value, ambiguousTypeIRI);
                             return;
                         }
                         if (ambiguousTypeIRI != null) {
@@ -175,10 +175,10 @@ public class JsonLdParser {
         
         //called when the resource represented by this node is used as subject
         private BlankNodeOrIRI getSubject() {
-            if (subject == null) {
-                subject = new BlankNode();
+            if (node == null) {
+                node = new BlankNode();
             }
-            return (BlankNodeOrIRI) subject;
+            return (BlankNodeOrIRI) node;
         }
 
         private BlankNodeOrIRI parseId() {
@@ -301,7 +301,7 @@ public class JsonLdParser {
         private void parseSingleObject() {
             final SubjectParser subjectParser = new SubjectParser();
             subjectParser.parse();
-            sink.add(new TripleImpl(subject, predicate, subjectParser.subject));
+            sink.add(new TripleImpl(subject, predicate, subjectParser.node));
         }
 
         private void parseArray() {
