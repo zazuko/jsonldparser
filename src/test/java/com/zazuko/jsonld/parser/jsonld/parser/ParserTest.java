@@ -89,9 +89,8 @@ public class ParserTest {
     }
     
     @Test
-    public void interlisParsing() {
-        final InputStream inJsonLd = getClass().getResourceAsStream("interlis.json");
-        final Graph graph = new SimpleGraph();
-        JsonLdParser.parse(inJsonLd, graph);
+    public void interlis() {
+        testFromResource("interlis");
     }
+    
 }
