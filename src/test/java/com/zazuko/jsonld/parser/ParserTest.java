@@ -104,4 +104,10 @@ public class ParserTest {
         testFromResource("knows-circle");
     }
     
+    @Test
+    public void languageLiteral() {
+        //Disabled because of a problem with the turtle parser, Clerezza issue CLEREZZA-1008
+        //testFromResource("language-literal");
+    }
+    
 }

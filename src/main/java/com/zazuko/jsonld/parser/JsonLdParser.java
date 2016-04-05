@@ -40,8 +40,10 @@ import org.apache.clerezza.commons.rdf.BlankNode;
 import org.apache.clerezza.commons.rdf.BlankNodeOrIRI;
 import org.apache.clerezza.commons.rdf.Graph;
 import org.apache.clerezza.commons.rdf.IRI;
+import org.apache.clerezza.commons.rdf.Language;
 import org.apache.clerezza.commons.rdf.RDFTerm;
 import org.apache.clerezza.commons.rdf.Triple;
+import org.apache.clerezza.commons.rdf.impl.utils.LiteralImpl;
 import org.apache.clerezza.commons.rdf.impl.utils.PlainLiteralImpl;
 import org.apache.clerezza.commons.rdf.impl.utils.TripleImpl;
 import org.apache.clerezza.commons.rdf.impl.utils.TypedLiteralImpl;
@@ -130,6 +132,7 @@ public class JsonLdParser {
 
         private IRI ambiguousTypeIRI = null;
         private String value = null;
+        private Language language = null;
         private RDFTerm node;
 
         public void parse() {
@@ -157,7 +160,11 @@ public class JsonLdParser {
                             if (node != null) {
                                 throw new RuntimeException("@value combined with incompatible key");
                             }
-                            node = new TypedLiteralImpl(value, ambiguousTypeIRI);
+                            if (language != null) {
+                                node = new PlainLiteralImpl(value, language);
+                            } else {
+                                node = new TypedLiteralImpl(value, ambiguousTypeIRI);
+                            }
                             return;
                         }
                         if (ambiguousTypeIRI != null) {
@@ -222,6 +229,19 @@ public class JsonLdParser {
                 } else {
                     for (IRI type : types) {
                         sink.add(new TripleImpl(getSubject(), RDF.type, type));
+                    }
+                }
+                return;
+            }
+            if (keyName.equals("@language")) {
+                final Event next = jsonParser.next();
+                switch (next) {
+                    case VALUE_STRING: {
+                        language = new Language(jsonParser.getString());
+                        break;
+                    }
+                    default: {
+                        throw new RuntimeException("Language must be a string"+next);
                     }
                 }
                 return;
