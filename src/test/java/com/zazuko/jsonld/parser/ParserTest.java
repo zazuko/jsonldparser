@@ -66,20 +66,24 @@ public class ParserTest {
     public void tearDown() {
     }
 
-    protected void testFromResource(String baseName) throws Exception {
-        final InputStream inJsonLd = getClass().getResourceAsStream(baseName+".json");
+    static void testFromResource(String baseName) throws Exception {
+        final Parser parser = Parser.getInstance();
+        final InputStream inTurtle = ParserTest.class.getResourceAsStream(baseName+".ttl");
+        final ImmutableGraph expected = parser.parse(inTurtle, SupportedFormat.TURTLE);
+        testFromResource(baseName+".json", expected);
+    }
+    static void testFromResource(String fileName, ImmutableGraph expected) throws Exception {
+        final InputStream inJsonLd = ParserTest.class.getResourceAsStream(fileName);
         final Graph graph = new SimpleGraph();
         JsonLdParser.parse(inJsonLd, graph);
         final ImmutableGraph result = graph.getImmutableGraph();
-        final Parser parser = Parser.getInstance();
-        final InputStream inTurtle = getClass().getResourceAsStream(baseName+".ttl");
-        final ImmutableGraph expected = parser.parse(inTurtle, SupportedFormat.TURTLE);
         Assert.assertEquals(expected, result);
         //And parse to stream
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        final InputStream inJsonLd2 = getClass().getResourceAsStream(baseName+".json");
+        final InputStream inJsonLd2 = ParserTest.class.getResourceAsStream(fileName);
         JsonLdParser.parse(inJsonLd2, baos);
         final InputStream inN3Output = new ByteArrayInputStream(baos.toByteArray());
+        final Parser parser = Parser.getInstance();
         final ImmutableGraph n3output = parser.parse(inN3Output, SupportedFormat.N_TRIPLE);
         Assert.assertEquals(expected, n3output);
     }
