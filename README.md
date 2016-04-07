@@ -4,8 +4,8 @@ Efficient [JSON-LD](http://json-ld.org/) parsing.
 
 Currently **supports only a tiny subset of the JSON-LD format**. 
 
-Noatble limitations:
-- The `@id` is only allowed as the first key of an object
+Notable limitations:
+- The `@id` and `@context` are only allowed as the first keys of an object
 - The `@graph` key is not yet supported, so it only allows for connected graphs
 - The value of `@context` key must be a context definition
 - A context definition may only contain simple mappings
