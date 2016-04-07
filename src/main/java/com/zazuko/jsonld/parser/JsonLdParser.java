@@ -82,10 +82,10 @@ public class JsonLdParser {
             throw new RuntimeException(ex);
         }
         parse(in, new TripleSink() {
-            
+
             final WeakHashMap<BlankNode, String> node2IdMap = new WeakHashMap<>();
             int idCounter = 1;
-            
+
             @Override
             public void add(Triple triple) {
                 printWriter.println(toNT(triple));
@@ -112,22 +112,22 @@ public class JsonLdParser {
                     idCounter++;
                     node2IdMap.put(node, id);
                 }
-                return "_:"+id;
+                return "_:" + id;
             }
-            
+
             private String toNT(RDFTerm node) {
                 if (node instanceof Literal) {
-                    return toNT((Literal)node);
+                    return toNT((Literal) node);
                 } else {
-                    return toNT((BlankNodeOrIRI)node);
+                    return toNT((BlankNodeOrIRI) node);
                 }
             }
-            
+
             private String toNT(BlankNodeOrIRI node) {
                 if (node instanceof IRI) {
-                    return toNT((IRI)node);
+                    return toNT((IRI) node);
                 } else {
-                    return toNT((BlankNode)node);
+                    return toNT((BlankNode) node);
                 }
             }
         });
@@ -153,6 +153,7 @@ public class JsonLdParser {
     private final JsonParser jsonParser;
     private final TripleSink sink;
     private final Map<String, BlankNode> label2bnodeMap = new HashMap<>();
+    private Context context = new Context();
 
     private JsonLdParser(JsonParser jsonParser, TripleSink sink) {
         this.jsonParser = jsonParser;
@@ -185,6 +186,14 @@ public class JsonLdParser {
         }
         return result;
     }
+    
+    private BlankNodeOrIRI parseNodeIdentifier(final String identifier) {
+        if (identifier.startsWith("_:")) {
+            return getBlankNode(identifier);
+        } else {
+            return context.resolve(identifier);
+        }
+    }
 
     class SubjectParser {
 
@@ -192,6 +201,7 @@ public class JsonLdParser {
         private String value = null;
         private Language language = null;
         private RDFTerm node;
+        Context origContext = null;
 
         public void parse() {
             JsonParser.Event first = jsonParser.next();
@@ -199,11 +209,22 @@ public class JsonLdParser {
                 throw new RuntimeException("Sorry");
             }
             String firstKey = jsonParser.getString();
-            if (firstKey.equals("@id")) {
-                node = parseId();
-                if (jsonParser.next().equals(JsonParser.Event.END_OBJECT)) {
-                    return;
+            while (firstKey.equals("@id") || firstKey.equals("@context")) {
+                if (firstKey.equals("@id")) {
+                    node = parseId();
+                    if (jsonParser.next().equals(JsonParser.Event.END_OBJECT)) {
+                        return;
+                    }
                 }
+                if (firstKey.equals("@context")) {
+                    final ContextParser contextParser = new ContextParser();
+                    origContext = context;
+                    context = contextParser.parse();
+                    if (jsonParser.next().equals(JsonParser.Event.END_OBJECT)) {
+                        return;
+                    }
+                }
+                firstKey = jsonParser.getString();
             }
             handleKey();
             while (jsonParser.hasNext()) {
@@ -222,6 +243,9 @@ public class JsonLdParser {
                                 node = new PlainLiteralImpl(value, language);
                             } else {
                                 node = new TypedLiteralImpl(value, ambiguousTypeIRI);
+                            }
+                            if (origContext != null) {
+                                context = origContext;
                             }
                             return;
                         }
@@ -249,12 +273,9 @@ public class JsonLdParser {
         private BlankNodeOrIRI parseId() {
             jsonParser.next();
             final String identifier = jsonParser.getString();
-            if (identifier.startsWith("_:")) {
-                return getBlankNode(identifier);
-            } else {
-                return new IRI(identifier);
-            }
+            return parseNodeIdentifier(identifier);
         }
+        
 
         private IRI getIRI(String keyName) {
             return new IRI(keyName);
@@ -317,8 +338,11 @@ public class JsonLdParser {
                 }
                 return;
             }
-            final IRI property = getIRI(keyName);
-            final ObjectParser subjectPredicateParser = new ObjectParser(getSubject(), property);
+            final BlankNodeOrIRI property = parseNodeIdentifier(keyName);
+            if (!(property instanceof IRI)) {
+                throw new RuntimeException("Sorry Clerezza only handles RDF, so BlankNodes in predicate poistion are not supported");
+            }
+            final ObjectParser subjectPredicateParser = new ObjectParser(getSubject(), (IRI) property);
             subjectPredicateParser.parse();
 
         }
@@ -405,4 +429,98 @@ public class JsonLdParser {
         }
 
     }
+
+    public class ContextParser {
+
+        public ContextParser() {
+        }
+
+        Context parse() {
+            final Context result = new Context(context);
+            JsonParser.Event firstKey = jsonParser.next();
+            /*its value MUST be null, an absolute IRI, a relative IRI, a context 
+            definition, or an array composed of any of these.*/
+            switch (firstKey) {
+                case START_OBJECT: {
+                    //its a context definition
+                    break;
+                }
+                default:
+                    throw new RuntimeException("Sorry we currently supoort only inline context definitions");
+            }
+            while (jsonParser.hasNext()) {
+                final JsonParser.Event next = jsonParser.next();
+                switch (next) {
+                    case KEY_NAME: {
+                        handleKey(result);
+                        break;
+                    }
+                    case END_OBJECT: {
+                        return result;
+                    }
+                    default: {
+                        throw new RuntimeException("Not supported here: " + next);
+                    }
+                }
+            }
+            throw new RuntimeException("Unexpected end of JSON data");
+        }
+
+        private void handleKey(Context target) {
+            final String term = jsonParser.getString();
+            JsonParser.Event valueEvent = jsonParser.next();
+            switch (valueEvent) {
+                case VALUE_STRING: {
+                    //TODO handle null
+                    //TODO apparently terms can be defined using terms from the same context as long as its not circular
+                    BlankNodeOrIRI value = parseNodeIdentifier(jsonParser.getString());
+                    target.register(term, value);
+                    break;
+                }
+                case START_OBJECT: {
+                    throw new RuntimeException("Expanded term definition not yet supported");
+                }
+            }
+        }
+
+    }
+    
+    static class Context {
+
+            private final Map<String, BlankNodeOrIRI> termMap = new HashMap<>();
+            private final Context parent;
+
+            public Context() {
+                parent = null;
+            }
+            
+            public Context(Context parent) {
+                this.parent = parent;
+            }
+
+            private BlankNodeOrIRI resolve(String key) {
+                final BlankNodeOrIRI value = termMap.get(key);
+                if (value != null) {
+                    return value;
+                }
+                final int colonPos = key.indexOf(':');
+                if (colonPos > -1) {
+                    final String prefix = key.substring(0, colonPos);
+                    final IRI expanded = (IRI) termMap.get(prefix);
+                    if (expanded != null) {
+                        return new IRI(expanded.getUnicodeString() + key.substring(colonPos + 1));
+                    }
+                }
+                if (parent == null) {
+                    return new IRI(key);
+                } else {
+                    return parent.resolve(key);
+                }
+            }
+
+            private void register(String term, BlankNodeOrIRI value) {
+                termMap.put(term, value);
+            }
+        }
+
 }
