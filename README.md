@@ -34,7 +34,7 @@ argument.
 
 ### Programmatic usage
 
-The following lines from the test illustarte the programmatic usage:
+The following lines from the test illustrate the programmatic usage:
 
 ```
 final InputStream inJsonLd = getClass().getResourceAsStream(baseName+".json");
