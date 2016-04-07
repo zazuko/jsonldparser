@@ -197,7 +197,7 @@ public class JsonLdParser {
 
     class SubjectParser {
 
-        private IRI ambiguousTypeIRI = null;
+        private BlankNodeOrIRI ambiguousTypeIRI = null;
         private String value = null;
         private Language language = null;
         private RDFTerm node;
@@ -242,7 +242,7 @@ public class JsonLdParser {
                             if (language != null) {
                                 node = new PlainLiteralImpl(value, language);
                             } else {
-                                node = new TypedLiteralImpl(value, ambiguousTypeIRI);
+                                node = new TypedLiteralImpl(value, (IRI) ambiguousTypeIRI);
                             }
                             if (origContext != null) {
                                 context = origContext;
@@ -286,11 +286,11 @@ public class JsonLdParser {
             if (keyName.equals("@type")) {
                 //either datatype or rdf type
                 //@type value must a string, an array of strings (, or an empty object?)
-                IRI[] types;
+                BlankNodeOrIRI[] types;
                 final Event next = jsonParser.next();
                 switch (next) {
                     case VALUE_STRING: {
-                        types = new IRI[]{new IRI(jsonParser.getString())};
+                        types = new BlankNodeOrIRI[]{parseNodeIdentifier(jsonParser.getString())};
                         break;
                     }
                     case START_ARRAY: {
@@ -306,7 +306,7 @@ public class JsonLdParser {
                 if (types.length == 1) {
                     ambiguousTypeIRI = types[0];
                 } else {
-                    for (IRI type : types) {
+                    for (BlankNodeOrIRI type : types) {
                         sink.add(new TripleImpl(getSubject(), RDF.type, type));
                     }
                 }
