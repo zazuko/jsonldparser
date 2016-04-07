@@ -36,7 +36,7 @@ argument.
 
 The following lines from the test illustrate the programmatic usage:
 
-```
+```java
 final InputStream inJsonLd = getClass().getResourceAsStream(baseName+".json");
 final Graph graph = new SimpleGraph();
 JsonLdParser.parse(inJsonLd, graph);
