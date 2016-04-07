@@ -1,0 +1,3 @@
+<http://example.org/test#chapter> <http://purl.org/dc/elements/1.1/title> "Chapter One" .
+<http://example.org/test#jane> <http://xmlns.com/foaf/0.1/name> "Jane" .
+<http://example.org/test#john> <http://xmlns.com/foaf/0.1/name> "John" .

@@ -1,0 +1,20 @@
+{
+  "@context": {
+    "name": "http://xmlns.com/foaf/0.1/name",
+    "title": "http://purl.org/dc/elements/1.1/title"
+  },
+  "@graph": [
+    {
+      "@id": "http://example.org/test#chapter",
+      "title": "Chapter One"
+    },
+    {
+      "@id": "http://example.org/test#jane",
+      "name": "Jane"
+    },
+    {
+      "@id": "http://example.org/test#john",
+      "name": "John"
+    }
+  ]
+}

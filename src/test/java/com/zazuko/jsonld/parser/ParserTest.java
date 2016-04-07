@@ -119,6 +119,11 @@ public class ParserTest {
     }
     
     @Test
+    public void disconnected() throws Exception {
+        testFromResource("disconnected");
+    }
+    
+    @Test
     public void languageLiteral() {
         //Disabled because of a problem with the turtle parser, Clerezza issue CLEREZZA-1008
         //testFromResource("language-literal");

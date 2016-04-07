@@ -6,7 +6,7 @@ Currently **supports only a tiny subset of the JSON-LD format**.
 
 Notable limitations:
 - The `@id` and `@context` are only allowed as the first keys of an object
-- The `@graph` key is not yet supported, so it only allows for connected graphs
+- Named graphs are not supported, so the `@graph` keyword is only allowed in the top-level object
 - The value of `@context` key must be a context definition
 - A context definition may only contain simple mappings
  

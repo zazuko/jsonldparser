@@ -1,7 +1,7 @@
 /*
  * The MIT License
  *
- * Copyright 2016 user.
+ * Copyright 2016 Zazuko GmbH.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -168,13 +168,13 @@ public class JsonLdParser {
                 break;
             }
             default: {
-                throw new RuntimeException("Currently only documents staring with resorce are supported, got: " + firstEvent);
+                throw new RuntimeException("Document should start with object: " + firstEvent);
             }
         }
     }
 
     private void parseJsonObject() {
-        SubjectParser subjectParser = new SubjectParser();
+        SubjectParser subjectParser = new SubjectParser(true);
         subjectParser.parse();
     }
 
@@ -202,6 +202,16 @@ public class JsonLdParser {
         private Language language = null;
         private RDFTerm node;
         Context origContext = null;
+        private final boolean isRoot;
+
+        public SubjectParser() {
+            isRoot = false;
+        }
+        
+        public SubjectParser(boolean isRoot) {
+            this.isRoot = isRoot;
+        }
+        
 
         public void parse() {
             JsonParser.Event first = jsonParser.next();
@@ -338,6 +348,10 @@ public class JsonLdParser {
                 }
                 return;
             }
+            if (keyName.equals("@graph")) {
+                parseGraph(isRoot);
+                return;
+            }
             final BlankNodeOrIRI property = parseNodeIdentifier(keyName);
             if (!(property instanceof IRI)) {
                 throw new RuntimeException("Sorry Clerezza only handles RDF, so BlankNodes in predicate poistion are not supported");
@@ -365,6 +379,42 @@ public class JsonLdParser {
                 }
             }
             throw new RuntimeException("Unterminated Array");
+        }
+
+        private void parseGraph(boolean root) {
+            if (!root) {
+                throw new RuntimeException("Currently @graph is only supported in the root object");
+            }
+            final Event nextEvent = jsonParser.next();
+            switch (nextEvent) {
+                case START_ARRAY: {
+                    parseArray();
+                    break;
+                }
+                case START_OBJECT: {
+                    throw new RuntimeException("node object as value of @graph not supported yet.");
+                }
+                default: throw new RuntimeException("Expected start of array, got: "+nextEvent);
+            }
+            
+        }
+        private void parseArray() {
+            while (jsonParser.hasNext()) {
+                final Event next = jsonParser.next();
+                switch (next) {
+                    case START_OBJECT: {
+                        final SubjectParser subjectParser = new SubjectParser();
+                        subjectParser.parse();
+                        break;
+                    }
+                    case END_ARRAY: {
+                        return;
+                    }
+                    default: {
+                        throw new RuntimeException("Not supported here: " + next);
+                    }
+                }
+            }
         }
 
     }
