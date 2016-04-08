@@ -128,4 +128,9 @@ public class ParserTest {
         testFromResource("language-literal");
     }
     
+    @Test
+    public void list() throws Exception {
+        testFromResource("list");
+    }
+    
 }

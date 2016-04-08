@@ -404,7 +404,15 @@ public class JsonLdParser {
                 case END_ARRAY: {
                     return new IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#nil");
                 }
-                default: throw new RuntimeException("Unexpected in List: "+nextEvent);
+                default: {
+                    BlankNode listNode = new BlankNode();
+                    final ObjectParser subjectPredicateParser = new ObjectParser(listNode, 
+                        new IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#first"));
+                    subjectPredicateParser.parse(nextEvent);
+                    sink.add(new TripleImpl(listNode, 
+                            new IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"), parseListRest()));
+                    return listNode;
+                }
             }
         }
         
@@ -458,6 +466,10 @@ public class JsonLdParser {
 
         void parse() {
             final Event firstEvent = jsonParser.next();
+            parse(firstEvent);
+        }
+        
+        void parse(final Event firstEvent) {
             switch (firstEvent) {
                 case START_OBJECT: {
                     parseSingleObject();
@@ -472,7 +484,7 @@ public class JsonLdParser {
                     break;
                 }
                 default: {
-                    throw new RuntimeException("Currently only documents staring with resorce are supported, got: " + firstEvent);
+                    throw new RuntimeException("Currently only documents starting with resorce are supported, got: " + firstEvent);
                 }
             }
         }
