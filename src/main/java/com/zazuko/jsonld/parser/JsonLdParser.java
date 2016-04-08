@@ -349,7 +349,14 @@ public class JsonLdParser {
                 return;
             }
             if (keyName.equals("@graph")) {
-                parseGraph(isRoot);
+                parseGraph();
+                return;
+            }
+            if (keyName.equals("@list")) {
+                if (node != null) {
+                    throw new RuntimeException("@list not expectd here");
+                }
+                parseList();
                 return;
             }
             final BlankNodeOrIRI property = parseNodeIdentifier(keyName);
@@ -380,9 +387,29 @@ public class JsonLdParser {
             }
             throw new RuntimeException("Unterminated Array");
         }
-
-        private void parseGraph(boolean root) {
-            if (!root) {
+        private void parseList() {
+            final Event nextEvent = jsonParser.next();
+            switch (nextEvent) {
+                case START_ARRAY: {
+                    node = parseListRest();
+                    break;
+                }
+                default: throw new RuntimeException("Expected start of array, got: "+nextEvent);
+            }
+        }
+        
+        private BlankNodeOrIRI parseListRest() {
+            final Event nextEvent = jsonParser.next();
+            switch (nextEvent) {
+                case END_ARRAY: {
+                    return new IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#nil");
+                }
+                default: throw new RuntimeException("Unexpected in List: "+nextEvent);
+            }
+        }
+        
+        private void parseGraph() {
+            if (!isRoot) {
                 throw new RuntimeException("Currently @graph is only supported in the root object");
             }
             final Event nextEvent = jsonParser.next();
