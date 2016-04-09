@@ -32,11 +32,16 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.json.Json;
 import javax.json.stream.JsonParser;
 import javax.json.stream.JsonParser.Event;
@@ -75,6 +80,9 @@ public class JsonLdParser {
     }
 
     static void parse(final InputStream in, final OutputStream out) {
+        parse(in, out, null);
+    }
+    static void parse(final InputStream in, final OutputStream out, final IRI base) {
         final PrintWriter printWriter;
         try {
             printWriter = new PrintWriter(new OutputStreamWriter(out, "utf-8"), true);
@@ -130,23 +138,29 @@ public class JsonLdParser {
                     return toNT((BlankNode) node);
                 }
             }
-        });
+        }, base);
     }
 
     static void parse(final InputStream in, final Graph graph) {
+        parse(in, graph, null);
+    }
+    
+    static void parse(final InputStream in, final Graph graph, final IRI base) {
         parse(in, new TripleSink() {
             @Override
             public void add(Triple triple) {
                 graph.add(triple);
             }
 
-        });
+        }, base);
     }
-
     static void parse(InputStream in, TripleSink sink) {
+        parse(in,sink, null);
+    }
+    static void parse(InputStream in, TripleSink sink, final IRI base) {
         final JsonParserFactory factory = Json.createParserFactory(null);
         final JsonParser jsonParser = factory.createParser(in, Charset.forName("utf-8"));
-        JsonLdParser jsonLdParser = new JsonLdParser(jsonParser, sink);
+        JsonLdParser jsonLdParser = new JsonLdParser(jsonParser, sink, base);
         jsonLdParser.parse();
     }
 
@@ -155,9 +169,10 @@ public class JsonLdParser {
     private final Map<String, BlankNode> label2bnodeMap = new HashMap<>();
     private Context context = new Context();
 
-    private JsonLdParser(JsonParser jsonParser, TripleSink sink) {
+    private JsonLdParser(JsonParser jsonParser, TripleSink sink, IRI base) {
         this.jsonParser = jsonParser;
         this.sink = sink;
+        context.setBaseIRI(base);
     }
 
     private void parse() {
@@ -187,11 +202,19 @@ public class JsonLdParser {
         return result;
     }
     
-    private BlankNodeOrIRI parseNodeIdentifier(final String identifier) {
+    private BlankNodeOrIRI parseBNodeRelativeUriOrCurie(final String identifier) {
         if (identifier.startsWith("_:")) {
             return getBlankNode(identifier);
         } else {
-            return context.resolve(identifier);
+            return context.resolveRelativeUriOrCurie(identifier);
+        }
+    }
+    
+    private BlankNodeOrIRI parseKeyOrType(final String identifier) {
+        if (identifier.startsWith("_:")) {
+            return getBlankNode(identifier);
+        } else {
+            return context.resolveKeyOrType(identifier);
         }
     }
 
@@ -283,7 +306,7 @@ public class JsonLdParser {
         private BlankNodeOrIRI parseId() {
             jsonParser.next();
             final String identifier = jsonParser.getString();
-            return parseNodeIdentifier(identifier);
+            return parseBNodeRelativeUriOrCurie(identifier);
         }
         
 
@@ -300,7 +323,7 @@ public class JsonLdParser {
                 final Event next = jsonParser.next();
                 switch (next) {
                     case VALUE_STRING: {
-                        types = new BlankNodeOrIRI[]{parseNodeIdentifier(jsonParser.getString())};
+                        types = new BlankNodeOrIRI[]{parseBNodeRelativeUriOrCurie(jsonParser.getString())};
                         break;
                     }
                     case START_ARRAY: {
@@ -359,7 +382,7 @@ public class JsonLdParser {
                 parseList();
                 return;
             }
-            final BlankNodeOrIRI property = parseNodeIdentifier(keyName);
+            final BlankNodeOrIRI property = parseKeyOrType(keyName);
             if (!(property instanceof IRI)) {
                 throw new RuntimeException("Sorry Clerezza only handles RDF, so BlankNodes in predicate poistion are not supported");
             }
@@ -562,7 +585,7 @@ public class JsonLdParser {
                 case VALUE_STRING: {
                     //TODO handle null
                     //TODO apparently terms can be defined using terms from the same context as long as its not circular
-                    BlankNodeOrIRI value = parseNodeIdentifier(jsonParser.getString());
+                    BlankNodeOrIRI value = parseKeyOrType(jsonParser.getString());
                     target.register(term, value);
                     break;
                 }
@@ -578,6 +601,7 @@ public class JsonLdParser {
 
             private final Map<String, BlankNodeOrIRI> termMap = new HashMap<>();
             private final Context parent;
+            private URL baseURL;
 
             public Context() {
                 parent = null;
@@ -586,12 +610,33 @@ public class JsonLdParser {
             public Context(Context parent) {
                 this.parent = parent;
             }
-
-            private BlankNodeOrIRI resolve(String key) {
-                final BlankNodeOrIRI value = termMap.get(key);
-                if (value != null) {
-                    return value;
+            
+            BlankNodeOrIRI resolveKeyOrType(String key) {
+                final BlankNodeOrIRI exactMatch = getExactMatch(key);
+                if (exactMatch != null) {
+                    return exactMatch;
                 }
+                final int colonPos = key.indexOf(':');
+                if (colonPos > -1) {
+                    return resolveCurie(key);
+                }
+                //TODO prepend vocab, ignore if not resolvable
+                if (parent == null) {
+                    return new IRI(key);
+                } else {
+                    return parent.resolveKeyOrType(key);
+                }
+            }
+            
+            BlankNodeOrIRI resolveRelativeUriOrCurie(String key) {
+                final int colonPos = key.indexOf(':');
+                if (colonPos > -1) {
+                    return resolveCurie(key);
+                }
+                return resolveRelativeUri(key);
+            }
+            
+            private BlankNodeOrIRI resolveCurie(String key) {
                 final int colonPos = key.indexOf(':');
                 if (colonPos > -1) {
                     final String prefix = key.substring(0, colonPos);
@@ -603,12 +648,51 @@ public class JsonLdParser {
                 if (parent == null) {
                     return new IRI(key);
                 } else {
-                    return parent.resolve(key);
+                    //TODO handle case prefix has been explicitely set to null
+                    return parent.resolveCurie(key);
+                }            
+            }
+            
+            private BlankNodeOrIRI getExactMatch(String key) {
+                final BlankNodeOrIRI value = termMap.get(key);
+                if (value != null) {
+                    return value;
+                }
+                if (parent != null) {
+                    return parent.getExactMatch(key);
+                } else {
+                    return null;
+                }
+            }
+
+            private BlankNodeOrIRI resolveRelativeUri(String key) {
+                if (baseURL != null) {
+                    try {
+                        return new IRI(new URL(baseURL, key).toString());
+                    } catch (MalformedURLException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                } else {
+                    if (parent != null) {
+                        return parent.resolveRelativeUri(key);
+                    } else {
+                        return new IRI(key);
+                    }
                 }
             }
 
             private void register(String term, BlankNodeOrIRI value) {
                 termMap.put(term, value);
+            }
+
+            private void setBaseIRI(IRI base) {
+                if (base != null) {
+                    try {
+                        this.baseURL = new URL(base.getUnicodeString());
+                    } catch (MalformedURLException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                }
             }
         }
 

@@ -26,6 +26,7 @@ package com.zazuko.jsonld.parser;
 import static com.zazuko.jsonld.parser.ParserTest.testFromResource;
 import java.io.IOException;
 import java.io.InputStream;
+import org.apache.clerezza.commons.rdf.IRI;
 import org.apache.clerezza.commons.rdf.ImmutableGraph;
 import org.apache.clerezza.rdf.core.serializedform.Parser;
 import org.apache.clerezza.rdf.core.serializedform.SupportedFormat;
@@ -65,17 +66,19 @@ public class TestSuiteTests {
     }
 
     @Test
-    public void hello() throws Exception {
+    public void testSuiteTests() throws Exception {
         PathNode testsuite = PathNodeFactory.getPathNode(getClass().getResource("testsuite"));
         for (String li : testsuite.list((PathNode pn, String string) -> string.endsWith("in.jsonld"))) {
-            testFromResource("testsuite/"+li.substring(0, li.length()-10));
+            testFromResource(li.substring(0, li.length()-10));
         }
     }
     
     static void testFromResource(String baseName) throws Exception {
         final Parser parser = Parser.getInstance();
-        final InputStream inTurtle = ParserTest.class.getResourceAsStream(baseName+"-out.nq");
+        final InputStream inTurtle = ParserTest.class.getResourceAsStream("testsuite/"+baseName+"-out.nq");
         final ImmutableGraph expected = parser.parse(inTurtle, SupportedFormat.TURTLE);
-        ParserTest.testFromResource(baseName+"-in.jsonld", expected);
+        final String jsonldFileName = baseName+"-in.jsonld";
+        IRI base = new IRI("http://json-ld.org/test-suite/tests/"+jsonldFileName);
+        ParserTest.testFromResource("testsuite/"+jsonldFileName, expected, base);
     }
 }

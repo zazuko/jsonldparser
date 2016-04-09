@@ -29,6 +29,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import org.apache.clerezza.commons.rdf.Graph;
+import org.apache.clerezza.commons.rdf.IRI;
 import org.apache.clerezza.commons.rdf.ImmutableGraph;
 import org.apache.clerezza.commons.rdf.impl.utils.simple.SimpleGraph;
 import org.apache.clerezza.rdf.core.serializedform.Parser;
@@ -70,18 +71,18 @@ public class ParserTest {
         final Parser parser = Parser.getInstance();
         final InputStream inTurtle = ParserTest.class.getResourceAsStream(baseName+".ttl");
         final ImmutableGraph expected = parser.parse(inTurtle, SupportedFormat.TURTLE);
-        testFromResource(baseName+".json", expected);
+        testFromResource(baseName+".json", expected, new IRI("http://base/"));
     }
-    static void testFromResource(String fileName, ImmutableGraph expected) throws Exception {
+    static void testFromResource(String fileName, ImmutableGraph expected, IRI base) throws Exception {
         final InputStream inJsonLd = ParserTest.class.getResourceAsStream(fileName);
         final Graph graph = new SimpleGraph();
-        JsonLdParser.parse(inJsonLd, graph);
+        JsonLdParser.parse(inJsonLd, graph, base);
         final ImmutableGraph result = graph.getImmutableGraph();
         Assert.assertEquals(expected, result);
         //And parse to stream
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         final InputStream inJsonLd2 = ParserTest.class.getResourceAsStream(fileName);
-        JsonLdParser.parse(inJsonLd2, baos);
+        JsonLdParser.parse(inJsonLd2, baos, base);
         final InputStream inN3Output = new ByteArrayInputStream(baos.toByteArray());
         final Parser parser = Parser.getInstance();
         final ImmutableGraph n3output = parser.parse(inN3Output, SupportedFormat.N_TRIPLE);
@@ -131,6 +132,11 @@ public class ParserTest {
     @Test
     public void list() throws Exception {
         testFromResource("list");
+    }
+    
+    @Test
+    public void relative() throws Exception {
+        testFromResource("relative");
     }
     
 }
