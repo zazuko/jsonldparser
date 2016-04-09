@@ -43,6 +43,7 @@ import javax.json.Json;
 import javax.json.stream.JsonParser;
 import javax.json.stream.JsonParser.Event;
 import javax.json.stream.JsonParserFactory;
+import javax.management.RuntimeErrorException;
 import org.apache.clerezza.commons.rdf.BlankNode;
 import org.apache.clerezza.commons.rdf.BlankNodeOrIRI;
 import org.apache.clerezza.commons.rdf.Graph;
@@ -210,9 +211,9 @@ public class JsonLdParser {
         }
     }
 
-    private BlankNodeOrIRI parseKeyOrType(final String identifier) {
+    private KeyResolution parseKeyOrType(final String identifier) {
         if (identifier.startsWith("_:")) {
-            return getBlankNode(identifier);
+            return new KeyResolution(getBlankNode(identifier));
         } else {
             return context.resolveKeyOrType(identifier);
         }
@@ -383,11 +384,12 @@ public class JsonLdParser {
                 parseList();
                 return;
             }
-            final BlankNodeOrIRI property = parseKeyOrType(keyName);
+            final KeyResolution keyResolution = parseKeyOrType(keyName);
+            final BlankNodeOrIRI property = keyResolution.keyValue;
             if (!(property instanceof IRI)) {
-                throw new RuntimeException("Sorry Clerezza only handles RDF, so BlankNodes in predicate poistion are not supported");
+                throw new RuntimeException("Sorry Clerezza only handles RDF, so BlankNodes in predicate position are not supported");
             }
-            final ObjectParser subjectPredicateParser = new ObjectParser(getSubject(), (IRI) property);
+            final ObjectParser subjectPredicateParser = new ObjectParser(getSubject(), (IRI) property, keyResolution.valueParser);
             subjectPredicateParser.parse();
 
         }
@@ -433,7 +435,8 @@ public class JsonLdParser {
                 default: {
                     BlankNode listNode = new BlankNode();
                     final ObjectParser subjectPredicateParser = new ObjectParser(listNode,
-                            new IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#first"));
+                            new IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#first"),
+                            new DefaultValueParser());
                     subjectPredicateParser.parse(nextEvent);
                     sink.add(new TripleImpl(listNode,
                             new IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"), parseListRest()));
@@ -489,10 +492,12 @@ public class JsonLdParser {
 
         private final BlankNodeOrIRI subject;
         private final IRI predicate;
+        private final ValueParser valueParser;
 
-        public ObjectParser(BlankNodeOrIRI subject, IRI predicate) {
+        public ObjectParser(BlankNodeOrIRI subject, IRI predicate, ValueParser valueParser) {
             this.subject = subject;
             this.predicate = predicate;
+            this.valueParser = valueParser;
         }
 
         void parse() {
@@ -511,7 +516,7 @@ public class JsonLdParser {
                     break;
                 }
                 case VALUE_STRING: {
-                    sink.add(new TripleImpl(subject, predicate, new PlainLiteralImpl(jsonParser.getString())));
+                    sink.add(new TripleImpl(subject, predicate, valueParser.parseValue()));
                     break;
                 }
                 default: {
@@ -593,21 +598,91 @@ public class JsonLdParser {
                 case VALUE_STRING: {
                     //TODO handle null
                     //TODO apparently terms can be defined using terms from the same context as long as its not circular
-                    BlankNodeOrIRI value = parseKeyOrType(jsonParser.getString());
-                    target.register(term, value);
+                    BlankNodeOrIRI value = parseKeyOrType(jsonParser.getString()).keyValue;
+                    target.register(term, new KeyResolution(value));
                     break;
                 }
                 case START_OBJECT: {
-                    throw new RuntimeException("Expanded term definition not yet supported");
+                    BlankNodeOrIRI id = null;
+                    ValueParser valueParser = null;
+                    WHILE: while (jsonParser.hasNext()) {
+                        final Event next = jsonParser.next();
+                        switch (next) {
+                            case KEY_NAME: {
+                                final String keyName = jsonParser.getString();
+                                if (keyName.equals("@type")) {
+                                    jsonParser.next();
+                                    final String typeValue = jsonParser.getString();
+                                    if (typeValue.equals("@id")) {
+                                        valueParser = new ValueParser() {
+                                            @Override
+                                            public RDFTerm parseValue() {
+                                                return new IRI(jsonParser.getString());
+                                            }
+                                        };
+                                    } else {
+                                        throw new RuntimeException("Not yet supported type: "+typeValue);
+                                    }
+                                    break;
+                                }
+                                if (keyName.equals("@id")) {
+                                    jsonParser.next();
+                                    id = parseKeyOrType(jsonParser.getString()).keyValue;
+                                    break;
+                                }
+                            }
+                            case END_OBJECT: {
+                                break WHILE;
+                            }
+                            default: {
+                                throw new RuntimeException("Not yet supported here: " + next);
+                            }
+                        }
+                    }
+                    if (id == null) {
+                        throw new RuntimeException("Term definition in context without @id");
+                    }
+                    if (valueParser == null) {
+                        valueParser = new DefaultValueParser();
+                    }
+                    target.register(term, new KeyResolution(id, valueParser));
+                    break;
                 }
             }
         }
 
     }
+    
+    interface ValueParser {
+        RDFTerm parseValue();
+    }
+    
+    class DefaultValueParser implements ValueParser {
+        @Override
+        public RDFTerm parseValue() {
+            return new PlainLiteralImpl(jsonParser.getString());
+        }
+    }
+    
+    class KeyResolution {
+        BlankNodeOrIRI keyValue;
+        ValueParser valueParser;
+        
+        public KeyResolution(BlankNodeOrIRI keyValue) {
+            this.keyValue = keyValue;
+            this.valueParser = new DefaultValueParser();
+        }
 
-    static class Context {
+        public KeyResolution(BlankNodeOrIRI keyValue, ValueParser valueParser) {
+            this.keyValue = keyValue;
+            this.valueParser = valueParser;
+        }
+        
+    }
 
-        private final Map<String, BlankNodeOrIRI> termMap = new HashMap<>();
+    class Context {
+
+        private final Map<String, KeyResolution> termMap = new HashMap<>();
         private final Context parent;
         private URL baseURL;
 
@@ -619,18 +694,18 @@ public class JsonLdParser {
             this.parent = parent;
         }
 
-        BlankNodeOrIRI resolveKeyOrType(String key) {
-            final BlankNodeOrIRI exactMatch = getExactMatch(key);
+        KeyResolution resolveKeyOrType(String key) {
+            final KeyResolution exactMatch = getExactMatch(key);
             if (exactMatch != null) {
                 return exactMatch;
             }
             final int colonPos = key.indexOf(':');
             if (colonPos > -1) {
-                return resolveCurie(key);
+                return new KeyResolution(resolveCurie(key));
             }
             //TODO prepend vocab, ignore if not resolvable
             if (parent == null) {
-                return new IRI(key);
+                return new KeyResolution(new IRI(key));
             } else {
                 return parent.resolveKeyOrType(key);
             }
@@ -648,8 +723,9 @@ public class JsonLdParser {
             final int colonPos = key.indexOf(':');
             if (colonPos > -1) {
                 final String prefix = key.substring(0, colonPos);
-                final IRI expanded = (IRI) termMap.get(prefix);
-                if (expanded != null) {
+                KeyResolution resolution = termMap.get(prefix);
+                if (resolution != null) {
+                    final IRI expanded = (IRI) resolution.keyValue;
                     return new IRI(expanded.getUnicodeString() + key.substring(colonPos + 1));
                 }
             }
@@ -661,8 +737,8 @@ public class JsonLdParser {
             }
         }
 
-        private BlankNodeOrIRI getExactMatch(String key) {
-            final BlankNodeOrIRI value = termMap.get(key);
+        private KeyResolution getExactMatch(String key) {
+            final KeyResolution value = termMap.get(key);
             if (value != null) {
                 return value;
             }
@@ -687,7 +763,7 @@ public class JsonLdParser {
             }
         }
 
-        private void register(String term, BlankNodeOrIRI value) {
+        private void register(String term, KeyResolution value) {
             termMap.put(term, value);
         }
 

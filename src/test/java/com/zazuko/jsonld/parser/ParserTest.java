@@ -139,4 +139,9 @@ public class ParserTest {
         testFromResource("relative");
     }
     
+    @Test
+    public void contextType() throws Exception {
+        testFromResource("context-type");
+    }
+    
 }
