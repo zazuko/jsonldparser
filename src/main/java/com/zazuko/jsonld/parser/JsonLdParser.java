@@ -82,6 +82,7 @@ public class JsonLdParser {
     static void parse(final InputStream in, final OutputStream out) {
         parse(in, out, null);
     }
+
     static void parse(final InputStream in, final OutputStream out, final IRI base) {
         final PrintWriter printWriter;
         try {
@@ -144,7 +145,7 @@ public class JsonLdParser {
     static void parse(final InputStream in, final Graph graph) {
         parse(in, graph, null);
     }
-    
+
     static void parse(final InputStream in, final Graph graph, final IRI base) {
         parse(in, new TripleSink() {
             @Override
@@ -154,9 +155,11 @@ public class JsonLdParser {
 
         }, base);
     }
+
     static void parse(InputStream in, TripleSink sink) {
-        parse(in,sink, null);
+        parse(in, sink, null);
     }
+
     static void parse(InputStream in, TripleSink sink, final IRI base) {
         final JsonParserFactory factory = Json.createParserFactory(null);
         final JsonParser jsonParser = factory.createParser(in, Charset.forName("utf-8"));
@@ -189,7 +192,7 @@ public class JsonLdParser {
     }
 
     private void parseJsonObject() {
-        SubjectParser subjectParser = new SubjectParser(true);
+        JsonObjectParser subjectParser = new JsonObjectParser(true);
         subjectParser.parse();
     }
 
@@ -201,7 +204,7 @@ public class JsonLdParser {
         }
         return result;
     }
-    
+
     private BlankNodeOrIRI parseBNodeRelativeUriOrCurie(final String identifier) {
         if (identifier.startsWith("_:")) {
             return getBlankNode(identifier);
@@ -209,7 +212,7 @@ public class JsonLdParser {
             return context.resolveRelativeUriOrCurie(identifier);
         }
     }
-    
+
     private BlankNodeOrIRI parseKeyOrType(final String identifier) {
         if (identifier.startsWith("_:")) {
             return getBlankNode(identifier);
@@ -218,7 +221,10 @@ public class JsonLdParser {
         }
     }
 
-    class SubjectParser {
+    /**
+     * Parses JSon Objects
+     */
+    class JsonObjectParser {
 
         private BlankNodeOrIRI ambiguousTypeIRI = null;
         private String value = null;
@@ -227,14 +233,13 @@ public class JsonLdParser {
         Context origContext = null;
         private final boolean isRoot;
 
-        public SubjectParser() {
+        public JsonObjectParser() {
             isRoot = false;
         }
-        
-        public SubjectParser(boolean isRoot) {
+
+        public JsonObjectParser(boolean isRoot) {
             this.isRoot = isRoot;
         }
-        
 
         public void parse() {
             JsonParser.Event first = jsonParser.next();
@@ -308,7 +313,6 @@ public class JsonLdParser {
             final String identifier = jsonParser.getString();
             return parseBNodeRelativeUriOrCurie(identifier);
         }
-        
 
         private IRI getIRI(String keyName) {
             return new IRI(keyName);
@@ -410,6 +414,7 @@ public class JsonLdParser {
             }
             throw new RuntimeException("Unterminated Array");
         }
+
         private void parseList() {
             final Event nextEvent = jsonParser.next();
             switch (nextEvent) {
@@ -417,10 +422,11 @@ public class JsonLdParser {
                     node = parseListRest();
                     break;
                 }
-                default: throw new RuntimeException("Expected start of array, got: "+nextEvent);
+                default:
+                    throw new RuntimeException("Expected start of array, got: " + nextEvent);
             }
         }
-        
+
         private BlankNodeOrIRI parseListRest() {
             final Event nextEvent = jsonParser.next();
             switch (nextEvent) {
@@ -429,16 +435,16 @@ public class JsonLdParser {
                 }
                 default: {
                     BlankNode listNode = new BlankNode();
-                    final ObjectParser subjectPredicateParser = new ObjectParser(listNode, 
-                        new IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#first"));
+                    final ObjectParser subjectPredicateParser = new ObjectParser(listNode,
+                            new IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#first"));
                     subjectPredicateParser.parse(nextEvent);
-                    sink.add(new TripleImpl(listNode, 
+                    sink.add(new TripleImpl(listNode,
                             new IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"), parseListRest()));
                     return listNode;
                 }
             }
         }
-        
+
         private void parseGraph() {
             if (!isRoot) {
                 throw new RuntimeException("Currently @graph is only supported in the root object");
@@ -452,16 +458,18 @@ public class JsonLdParser {
                 case START_OBJECT: {
                     throw new RuntimeException("node object as value of @graph not supported yet.");
                 }
-                default: throw new RuntimeException("Expected start of array, got: "+nextEvent);
+                default:
+                    throw new RuntimeException("Expected start of array, got: " + nextEvent);
             }
-            
+
         }
+
         private void parseArray() {
             while (jsonParser.hasNext()) {
                 final Event next = jsonParser.next();
                 switch (next) {
                     case START_OBJECT: {
-                        final SubjectParser subjectParser = new SubjectParser();
+                        final JsonObjectParser subjectParser = new JsonObjectParser();
                         subjectParser.parse();
                         break;
                     }
@@ -477,6 +485,9 @@ public class JsonLdParser {
 
     }
 
+    /**
+     * Parses something that evaluates to a resource at object position in a statement
+     */
     class ObjectParser {
 
         private final BlankNodeOrIRI subject;
@@ -491,7 +502,7 @@ public class JsonLdParser {
             final Event firstEvent = jsonParser.next();
             parse(firstEvent);
         }
-        
+
         void parse(final Event firstEvent) {
             switch (firstEvent) {
                 case START_OBJECT: {
@@ -513,7 +524,7 @@ public class JsonLdParser {
         }
 
         private void parseSingleObject() {
-            final SubjectParser subjectParser = new SubjectParser();
+            final JsonObjectParser subjectParser = new JsonObjectParser();
             subjectParser.parse();
             sink.add(new TripleImpl(subject, predicate, subjectParser.node));
         }
@@ -596,104 +607,102 @@ public class JsonLdParser {
         }
 
     }
-    
+
     static class Context {
 
-            private final Map<String, BlankNodeOrIRI> termMap = new HashMap<>();
-            private final Context parent;
-            private URL baseURL;
+        private final Map<String, BlankNodeOrIRI> termMap = new HashMap<>();
+        private final Context parent;
+        private URL baseURL;
 
-            public Context() {
-                parent = null;
-            }
-            
-            public Context(Context parent) {
-                this.parent = parent;
-            }
-            
-            BlankNodeOrIRI resolveKeyOrType(String key) {
-                final BlankNodeOrIRI exactMatch = getExactMatch(key);
-                if (exactMatch != null) {
-                    return exactMatch;
-                }
-                final int colonPos = key.indexOf(':');
-                if (colonPos > -1) {
-                    return resolveCurie(key);
-                }
-                //TODO prepend vocab, ignore if not resolvable
-                if (parent == null) {
-                    return new IRI(key);
-                } else {
-                    return parent.resolveKeyOrType(key);
-                }
-            }
-            
-            BlankNodeOrIRI resolveRelativeUriOrCurie(String key) {
-                final int colonPos = key.indexOf(':');
-                if (colonPos > -1) {
-                    return resolveCurie(key);
-                }
-                return resolveRelativeUri(key);
-            }
-            
-            private BlankNodeOrIRI resolveCurie(String key) {
-                final int colonPos = key.indexOf(':');
-                if (colonPos > -1) {
-                    final String prefix = key.substring(0, colonPos);
-                    final IRI expanded = (IRI) termMap.get(prefix);
-                    if (expanded != null) {
-                        return new IRI(expanded.getUnicodeString() + key.substring(colonPos + 1));
-                    }
-                }
-                if (parent == null) {
-                    return new IRI(key);
-                } else {
-                    //TODO handle case prefix has been explicitely set to null
-                    return parent.resolveCurie(key);
-                }            
-            }
-            
-            private BlankNodeOrIRI getExactMatch(String key) {
-                final BlankNodeOrIRI value = termMap.get(key);
-                if (value != null) {
-                    return value;
-                }
-                if (parent != null) {
-                    return parent.getExactMatch(key);
-                } else {
-                    return null;
-                }
-            }
+        public Context() {
+            parent = null;
+        }
 
-            private BlankNodeOrIRI resolveRelativeUri(String key) {
-                if (baseURL != null) {
-                    try {
-                        return new IRI(new URL(baseURL, key).toString());
-                    } catch (MalformedURLException ex) {
-                        throw new RuntimeException(ex);
-                    }
-                } else {
-                    if (parent != null) {
-                        return parent.resolveRelativeUri(key);
-                    } else {
-                        return new IRI(key);
-                    }
+        public Context(Context parent) {
+            this.parent = parent;
+        }
+
+        BlankNodeOrIRI resolveKeyOrType(String key) {
+            final BlankNodeOrIRI exactMatch = getExactMatch(key);
+            if (exactMatch != null) {
+                return exactMatch;
+            }
+            final int colonPos = key.indexOf(':');
+            if (colonPos > -1) {
+                return resolveCurie(key);
+            }
+            //TODO prepend vocab, ignore if not resolvable
+            if (parent == null) {
+                return new IRI(key);
+            } else {
+                return parent.resolveKeyOrType(key);
+            }
+        }
+
+        BlankNodeOrIRI resolveRelativeUriOrCurie(String key) {
+            final int colonPos = key.indexOf(':');
+            if (colonPos > -1) {
+                return resolveCurie(key);
+            }
+            return resolveRelativeUri(key);
+        }
+
+        private BlankNodeOrIRI resolveCurie(String key) {
+            final int colonPos = key.indexOf(':');
+            if (colonPos > -1) {
+                final String prefix = key.substring(0, colonPos);
+                final IRI expanded = (IRI) termMap.get(prefix);
+                if (expanded != null) {
+                    return new IRI(expanded.getUnicodeString() + key.substring(colonPos + 1));
                 }
             }
-
-            private void register(String term, BlankNodeOrIRI value) {
-                termMap.put(term, value);
+            if (parent == null) {
+                return new IRI(key);
+            } else {
+                //TODO handle case prefix has been explicitely set to null
+                return parent.resolveCurie(key);
             }
+        }
 
-            private void setBaseIRI(IRI base) {
-                if (base != null) {
-                    try {
-                        this.baseURL = new URL(base.getUnicodeString());
-                    } catch (MalformedURLException ex) {
-                        throw new RuntimeException(ex);
-                    }
+        private BlankNodeOrIRI getExactMatch(String key) {
+            final BlankNodeOrIRI value = termMap.get(key);
+            if (value != null) {
+                return value;
+            }
+            if (parent != null) {
+                return parent.getExactMatch(key);
+            } else {
+                return null;
+            }
+        }
+
+        private BlankNodeOrIRI resolveRelativeUri(String key) {
+            if (baseURL != null) {
+                try {
+                    return new IRI(new URL(baseURL, key).toString());
+                } catch (MalformedURLException ex) {
+                    throw new RuntimeException(ex);
+                }
+            } else if (parent != null) {
+                return parent.resolveRelativeUri(key);
+            } else {
+                return new IRI(key);
+            }
+        }
+
+        private void register(String term, BlankNodeOrIRI value) {
+            termMap.put(term, value);
+        }
+
+        private void setBaseIRI(IRI base) {
+            if (base != null) {
+                try {
+                    this.baseURL = new URL(base.getUnicodeString());
+                } catch (MalformedURLException ex) {
+                    throw new RuntimeException(ex);
                 }
             }
         }
+    }
 
 }
