@@ -620,8 +620,15 @@ public class JsonLdParser {
                                                 return new IRI(jsonParser.getString());
                                             }
                                         };
-                                    } else {
-                                        throw new RuntimeException("Not yet supported type: "+typeValue);
+                                    } else {                                        
+                                        valueParser = new ValueParser() {
+                                            @Override
+                                            public RDFTerm parseValue() {
+                                                //this is not precomputed in the closure as to consider prefix in the same context
+                                                final IRI typeIri = (IRI) parseKeyOrType(typeValue).keyValue;
+                                                return new TypedLiteralImpl(jsonParser.getString(), typeIri);
+                                            }
+                                        };
                                     }
                                     break;
                                 }

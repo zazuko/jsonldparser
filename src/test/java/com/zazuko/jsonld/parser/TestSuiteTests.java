@@ -65,6 +65,14 @@ public class TestSuiteTests {
     public void tearDown() {
     }
 
+    /*
+    //this is here to debug individual test cases
+    @Test
+    public void singleTest() throws Exception {
+        String li = "toRdf-0020-in.jsonld";
+        testFromResource(li.substring(0, li.length()-10));
+    }*/
+    
     @Test
     public void testSuiteTests() throws Exception {
         PathNode testsuite = PathNodeFactory.getPathNode(getClass().getResource("testsuite"));
