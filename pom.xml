@@ -118,6 +118,18 @@
         </plugins>
     </build>
     <repositories>
+        <!-- repos for SNAPSHOTS, no idea why two, but its temporary anyway, till there's release fixing CLEREZZA-1009 -->
+        <repository>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <id>apache.snapshots2</id>
+            <name>Apache Snapshot Repository</name>
+            <url>https://repository.apache.org/content/groups/snapshots/</url>
+        </repository>
         <repository>
             <snapshots>
                 <enabled>true</enabled>
@@ -126,8 +138,8 @@
                 <enabled>false</enabled>
             </releases>
             <id>apache.snapshots</id>
-            <name>Apache Snapshot Repository</name>
-            <url>http://repository.apache.org/snapshots</url>
+            <name>Apache Snapshots Repository</name>
+            <url>https://repository.apache.org/content/repositories/snapshots/</url>
         </repository>
     </repositories>
     <properties>
